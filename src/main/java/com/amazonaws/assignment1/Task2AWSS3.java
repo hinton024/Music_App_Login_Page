@@ -20,7 +20,7 @@ import java.util.Set;
 
 public class Task2AWSS3 {
 
-    private static final String BUCKET_NAME = "Music"; // Replace with your S3 bucket name
+    private static final String BUCKET_NAME = "s4062787-mybucket"; // Replace with your S3 bucket name
 
     public static void main(String[] args) {
         // Initialize S3 client

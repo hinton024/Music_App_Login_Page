@@ -29,6 +29,37 @@
             <artifactId>json</artifactId>
             <version>20230227</version>
         </dependency>
+        <!-- Spark Java Web Framework -->
+        <dependency>
+            <groupId>com.sparkjava</groupId>
+            <artifactId>spark-core</artifactId>
+            <version>2.9.4</version>
+        </dependency>
+
+        <!-- Thymeleaf Template Engine -->
+        <dependency>
+            <groupId>com.sparkjava</groupId>
+            <artifactId>spark-template-thymeleaf</artifactId>
+            <version>2.7.1</version>
+        </dependency>
+
+        <!-- DynamoDB Document API -->
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-dynamodb</artifactId>
+            <version>1.12.472</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>1.7.36</version>
+        </dependency>
+        <!-- Velocity Template Engine -->
+        <dependency>
+            <groupId>com.sparkjava</groupId>
+            <artifactId>spark-template-velocity</artifactId>
+            <version>2.7.1</version>
+        </dependency>
     </dependencies>
 
 
