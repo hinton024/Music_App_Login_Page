@@ -18,6 +18,7 @@ public class Application {
         // Set up routes
         SparkLoginHandler.setupLoginRoutes();
         SparkRegisterHandler.setupRegisterRoutes();
+        SparkMainHandler.setupMainRoutes();
         // Add other routes here
 
         System.out.println("Server started on port " + Spark.port());

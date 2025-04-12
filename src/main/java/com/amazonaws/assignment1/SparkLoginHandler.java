@@ -41,6 +41,7 @@ public class SparkLoginHandler {
                 if (item != null && item.getString("password").equals(password)) {
                     // Valid credentials
                     request.session(true).attribute("user", email);
+                    request.session().attribute("userEmail", email);
 
                     jsonResponse.put("success", true);
                     jsonResponse.put("message", "Login successful");

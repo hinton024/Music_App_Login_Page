@@ -8,10 +8,370 @@
         margin: 20px;
         padding: 0;
     }
+    header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .user-area {
+        font-weight: bold;
+    }
+    .logout-link {
+        text-decoration: none;
+        color: #4CAF50;
+    }
+    .container {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .section {
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 15px;
+    }
+    h2 {
+        margin-top: 0;
+    }
+    .music-item {
+        border: 1px solid #eee;
+        padding: 10px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+    }
+    .music-info {
+        flex-grow: 1;
+    }
+    .artist-image {
+        width: 80px;
+        height: 80px;
+        object-fit: cover;
+        margin: 0 15px;
+    }
+    button {
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        border-radius: 3px;
+        cursor: pointer;
+    }
+    button.remove {
+        background-color: #f44336;
+    }
+    button:hover {
+        opacity: 0.8;
+    }
+    .form-group {
+        margin-bottom: 10px;
+    }
+    label {
+        display: inline-block;
+        width: 60px;
+    }
+    input[type="text"] {
+        padding: 5px;
+        width: 200px;
+    }
+    .query-button {
+        margin-top: 10px;
+    }
+    .error-message {
+        color: red;
+        margin-top: 10px;
+        display: none;
+    }
+    .results-area {
+        margin-top: 15px;
+    }
   </style>
 </head>
 <body>
-<h1>Welcome!</h1>
-<p>You have successfully logged in.</p>
+<header>
+  <div class="user-area">Welcome, <span id="username">User</span>!</div>
+  <a href="login.html" class="logout-link">Logout</a>
+</header>
+
+<div class="container">
+  <!-- Subscription Area -->
+  <div class="section">
+    <h2>Your Subscriptions</h2>
+    <div id="subscription-area">
+      <!-- Subscribed music will be dynamically inserted here -->
+      <p id="no-subscriptions">You haven't subscribed to any songs yet.</p>
+    </div>
+  </div>
+
+  <!-- Query Area -->
+  <div class="section">
+    <h2>Search for Music</h2>
+    <div class="form-group">
+      <label for="title">Title:</label>
+      <input type="text" id="title" name="title">
+    </div>
+    <div class="form-group">
+      <label for="artist">Artist:</label>
+      <input type="text" id="artist" name="artist">
+    </div>
+    <div class="form-group">
+      <label for="year">Year:</label>
+      <input type="text" id="year" name="year">
+    </div>
+    <div class="form-group">
+      <label for="album">Album:</label>
+      <input type="text" id="album" name="album">
+    </div>
+    <button id="query-button" class="query-button">Query</button>
+    <p id="error-message" class="error-message">No result is retrieved. Please query again.</p>
+
+    <div id="results-area" class="results-area">
+      <!-- Query results will be dynamically inserted here -->
+    </div>
+  </div>
+</div>
+
+<script>
+  // Global variables for user session
+  let currentUser = {};
+  let subscriptions = [];
+
+  // Load user information on page load
+  document.addEventListener('DOMContentLoaded', function() {
+      fetchCurrentUser();
+      fetchSubscriptions();
+  });
+
+  // Fetch current user information
+  function fetchCurrentUser() {
+      fetch('/api/current-user')
+          .then(response => response.json())
+          .then(data => {
+              if (data.success) {
+                  currentUser = data.user;
+                  document.getElementById('username').textContent = currentUser.username;
+              } else {
+                  // Redirect to login if no active session
+                  window.location.href = "login.html";
+              }
+          })
+          .catch(error => {
+              console.error('Error fetching user info:', error);
+              window.location.href = "login.html";
+          });
+  }
+
+  // Fetch user's subscriptions
+  function fetchSubscriptions() {
+      fetch('/api/subscriptions')
+          .then(response => response.json())
+          .then(data => {
+              if (data.success) {
+                  subscriptions = data.subscriptions;
+                  updateSubscriptionArea();
+              }
+          })
+          .catch(error => {
+              console.error('Error fetching subscriptions:', error);
+          });
+  }
+
+  // Update subscription area with user's subscriptions
+  function updateSubscriptionArea() {
+      const subscriptionArea = document.getElementById('subscription-area');
+      const noSubscriptions = document.getElementById('no-subscriptions');
+
+      if (subscriptions.length === 0) {
+          noSubscriptions.style.display = 'block';
+          subscriptionArea.innerHTML = '<p id="no-subscriptions">You haven\'t subscribed to any songs yet.</p>';
+          return;
+      }
+
+      noSubscriptions.style.display = 'none';
+      subscriptionArea.innerHTML = ''; // Clear existing content
+
+      // Create and append each subscription item
+      subscriptions.forEach(subscription => {
+          const musicItem = document.createElement('div');
+          musicItem.className = 'music-item';
+          musicItem.setAttribute('data-id', subscription.id);
+
+          // Music info
+          const musicInfo = document.createElement('div');
+          musicInfo.className = 'music-info';
+          musicInfo.innerHTML = `
+              <p><strong>Title:</strong> ${subscription.title}</p>
+              <p><strong>Artist:</strong> ${subscription.artist}</p>
+              <p><strong>Year:</strong> ${subscription.year}</p>
+              <p><strong>Album:</strong> ${subscription.album}</p>
+          `;
+
+          // Artist image
+          const artistImage = document.createElement('img');
+          artistImage.className = 'artist-image';
+          artistImage.src = subscription.imageUrl || 'default-artist.jpg';
+          artistImage.alt = subscription.artist;
+
+          // Remove button
+          const removeButton = document.createElement('button');
+          removeButton.textContent = 'Remove';
+          removeButton.className = 'remove';
+          removeButton.onclick = function() {
+              removeSubscription(subscription.id);
+          };
+
+          musicItem.appendChild(musicInfo);
+          musicItem.appendChild(artistImage);
+          musicItem.appendChild(removeButton);
+
+          subscriptionArea.appendChild(musicItem);
+      });
+  }
+
+  // Create a music item element
+  function createMusicItem(music, isSubscription) {
+      const musicItem = document.createElement('div');
+      musicItem.className = 'music-item';
+
+      // Music info
+      const musicInfo = document.createElement('div');
+      musicInfo.className = 'music-info';
+      musicInfo.innerHTML = `
+          <p><strong>Title:</strong> ${music.title}</p>
+          <p><strong>Artist:</strong> ${music.artist}</p>
+          <p><strong>Year:</strong> ${music.year}</p>
+          <p><strong>Album:</strong> ${music.album}</p>
+      `;
+
+      // Artist image
+      const artistImage = document.createElement('img');
+      artistImage.className = 'artist-image';
+      artistImage.src = music.imageUrl || 'default-artist.jpg';
+      artistImage.alt = music.artist;
+
+      // Button (Subscribe or Remove)
+      const button = document.createElement('button');
+      if (isSubscription) {
+          button.textContent = 'Remove';
+          button.className = 'remove';
+          button.onclick = () => removeSubscription(music.id);
+      } else {
+          button.textContent = 'Subscribe';
+          button.onclick = () => addSubscription(music);
+      }
+
+      musicItem.appendChild(musicInfo);
+      musicItem.appendChild(artistImage);
+      musicItem.appendChild(button);
+
+      return musicItem;
+  }
+
+  // Query button click handler
+  document.getElementById('query-button').addEventListener('click', function() {
+      const title = document.getElementById('title').value.trim();
+      const artist = document.getElementById('artist').value.trim();
+      const year = document.getElementById('year').value.trim();
+      const album = document.getElementById('album').value.trim();
+
+      // Validate that at least one field is filled
+      if (!title && !artist && !year && !album) {
+          alert('Please fill at least one field to search.');
+          return;
+      }
+
+      // Create query parameters
+      const params = new URLSearchParams();
+      if (title) params.append('title', title);
+      if (artist) params.append('artist', artist);
+      if (year) params.append('year', year);
+      if (album) params.append('album', album);
+
+      // Send query to server
+      fetch(`/api/music/search?${params.toString()}`)
+          .then(response => response.json())
+          .then(data => {
+              if (data.success && data.results.length > 0) {
+                  displaySearchResults(data.results);
+              } else {
+                  document.getElementById('results-area').innerHTML = '';
+                  document.getElementById('error-message').style.display = 'block';
+              }
+          })
+          .catch(error => {
+              console.error('Error searching music:', error);
+              document.getElementById('error-message').style.display = 'block';
+          });
+  });
+
+  // Display search results
+  function displaySearchResults(results) {
+      const resultsArea = document.getElementById('results-area');
+      document.getElementById('error-message').style.display = 'none';
+
+      resultsArea.innerHTML = '<h3>Search Results:</h3>';
+
+      results.forEach(result => {
+          const musicItem = createMusicItem(result, false);
+          resultsArea.appendChild(musicItem);
+      });
+  }
+
+// Add subscription
+function addSubscription(music) {
+    fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            title: music.title,
+            artist: music.artist
+        }),
+        credentials: 'same-origin'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Add to local subscriptions and update UI
+            subscriptions.push(music);
+            updateSubscriptionArea();
+            alert('Subscription added!');
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error adding subscription:', error);
+    });
+}
+function removeSubscription(subscriptionId) {
+    if (!subscriptionId) {
+        console.error("Cannot remove subscription: ID is undefined");
+        return;
+    }
+
+    fetch(`/api/subscriptions/${subscriptionId}`, {
+        method: 'DELETE',
+        credentials: 'same-origin'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Remove from local array and update UI
+            subscriptions = subscriptions.filter(sub => sub.id !== subscriptionId);
+            updateSubscriptionArea();
+            alert("Subscription removed successfully");
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error removing subscription:', error);
+    });
+}
+
+</script>
 </body>
 </html>
