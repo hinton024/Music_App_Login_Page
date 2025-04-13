@@ -52,7 +52,7 @@ public class SparkMainHandler {
         // Subscriptions endpoints
         Spark.get("/api/subscriptions", SparkMainHandler::getUserSubscriptions);
         Spark.post("/api/subscriptions", SparkMainHandler::addSubscription);
-        Spark.delete("/api/subscriptions", SparkMainHandler::removeSubscription);
+        Spark.delete("/api/subscriptions/:id", SparkMainHandler::removeSubscription);
 
         // Music search endpoint
         Spark.get("/api/music/search", SparkMainHandler::searchMusic);
@@ -131,7 +131,7 @@ public class SparkMainHandler {
 
                 if (musicItem != null) {
                     JSONObject subscription = new JSONObject();
-                    subscription.put("id", musicId);
+                    subscription.put("id", item.getString("id")); // This line adds the subscription ID
                     subscription.put("title", musicItem.getString("title"));
                     subscription.put("artist", musicItem.getString("artist"));
                     subscription.put("year", musicItem.getString("year"));

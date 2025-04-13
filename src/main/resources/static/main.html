@@ -179,55 +179,70 @@
 
   // Update subscription area with user's subscriptions
   function updateSubscriptionArea() {
-      const subscriptionArea = document.getElementById('subscription-area');
-      const noSubscriptions = document.getElementById('no-subscriptions');
+    // Debug the subscriptions array
+    console.log("Subscriptions data:", subscriptions);
 
-      if (subscriptions.length === 0) {
-          noSubscriptions.style.display = 'block';
-          subscriptionArea.innerHTML = '<p id="no-subscriptions">You haven\'t subscribed to any songs yet.</p>';
-          return;
-      }
+    const subscriptionArea = document.getElementById('subscription-area');
+    const noSubscriptions = document.getElementById('no-subscriptions');
 
-      noSubscriptions.style.display = 'none';
-      subscriptionArea.innerHTML = ''; // Clear existing content
+    if (subscriptions.length === 0) {
+        noSubscriptions.style.display = 'block';
+        subscriptionArea.innerHTML = '<p id="no-subscriptions">You haven\'t subscribed to any songs yet.</p>';
+        return;
+    }
 
-      // Create and append each subscription item
-      subscriptions.forEach(subscription => {
-          const musicItem = document.createElement('div');
-          musicItem.className = 'music-item';
-          musicItem.setAttribute('data-id', subscription.id);
+    noSubscriptions.style.display = 'none';
+    subscriptionArea.innerHTML = ''; // Clear existing content
 
-          // Music info
-          const musicInfo = document.createElement('div');
-          musicInfo.className = 'music-info';
-          musicInfo.innerHTML = `
-              <p><strong>Title:</strong> ${subscription.title}</p>
-              <p><strong>Artist:</strong> ${subscription.artist}</p>
-              <p><strong>Year:</strong> ${subscription.year}</p>
-              <p><strong>Album:</strong> ${subscription.album}</p>
-          `;
+    // Create and append each subscription item
+    subscriptions.forEach(subscription => {
+        // Debug each subscription object
+        console.log("Processing subscription:", subscription);
 
-          // Artist image
-          const artistImage = document.createElement('img');
-          artistImage.className = 'artist-image';
-          artistImage.src = subscription.imageUrl || 'default-artist.jpg';
-          artistImage.alt = subscription.artist;
+        const musicItem = document.createElement('div');
+        musicItem.className = 'music-item';
 
-          // Remove button
-          const removeButton = document.createElement('button');
-          removeButton.textContent = 'Remove';
-          removeButton.className = 'remove';
-          removeButton.onclick = function() {
-              removeSubscription(subscription.id);
-          };
+        // Make sure id exists - use id if available, otherwise fallback to title
+        const subId = subscription.id || subscription.title;
+        console.log("Using ID for music item:", subId);
+        musicItem.setAttribute('data-id', subId);
 
-          musicItem.appendChild(musicInfo);
-          musicItem.appendChild(artistImage);
-          musicItem.appendChild(removeButton);
+        // Music info
+        const musicInfo = document.createElement('div');
+        musicInfo.className = 'music-info';
+        musicInfo.innerHTML = `
+            <p><strong>Title:</strong> ${subscription.title}</p>
+            <p><strong>Artist:</strong> ${subscription.artist}</p>
+            <p><strong>Year:</strong> ${subscription.year || 'N/A'}</p>
+            <p><strong>Album:</strong> ${subscription.album || 'N/A'}</p>
+        `;
 
-          subscriptionArea.appendChild(musicItem);
-      });
-  }
+        // Artist image
+        const artistImage = document.createElement('img');
+        artistImage.className = 'artist-image';
+        artistImage.src = subscription.imageUrl || 'default-artist.jpg';
+        artistImage.alt = subscription.artist;
+
+        // Remove button
+        const removeButton = document.createElement('button');
+        removeButton.textContent = 'Remove';
+        removeButton.className = 'remove';
+        removeButton.setAttribute('data-id', subId);
+        console.log("Adding remove button with ID:", subId);
+
+        // Direct event handler assignment
+        removeButton.onclick = function() {
+            console.log("Remove button clicked with ID:", subId);
+            removeSubscription(subId);
+        };
+
+        musicItem.appendChild(musicInfo);
+        musicItem.appendChild(artistImage);
+        musicItem.appendChild(removeButton);
+
+        subscriptionArea.appendChild(musicItem);
+    });
+}
 
   // Create a music item element
   function createMusicItem(music, isSubscription) {
