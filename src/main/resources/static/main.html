@@ -86,6 +86,36 @@
     .results-area {
         margin-top: 15px;
     }
+    .loading {
+      display: none;
+      text-align: center;
+      margin: 10px 0;
+    }
+    .loading::after {
+      content: "...";
+      animation: dots 1s steps(5, end) infinite;
+    }
+    @keyframes dots {
+      0%, 20% { content: "."; }
+      40% { content: ".."; }
+      60% { content: "..."; }
+      80%, 100% { content: ""; }
+    }
+    .toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background-color: #4CAF50;
+      color: white;
+      padding: 15px;
+      border-radius: 5px;
+      display: none;
+      z-index: 1000;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .toast.error {
+      background-color: #f44336;
+    }
   </style>
 </head>
 <body>
@@ -94,10 +124,13 @@
   <a href="login.html" class="logout-link">Logout</a>
 </header>
 
+<div id="toast" class="toast"></div>
+
 <div class="container">
   <!-- Subscription Area -->
   <div class="section">
     <h2>Your Subscriptions</h2>
+    <div id="subscription-loading" class="loading">Loading subscriptions</div>
     <div id="subscription-area">
       <!-- Subscribed music will be dynamically inserted here -->
       <p id="no-subscriptions">You haven't subscribed to any songs yet.</p>
@@ -124,6 +157,7 @@
       <input type="text" id="album" name="album">
     </div>
     <button id="query-button" class="query-button">Query</button>
+    <div id="query-loading" class="loading">Searching</div>
     <p id="error-message" class="error-message">No result is retrieved. Please query again.</p>
 
     <div id="results-area" class="results-area">
@@ -164,16 +198,23 @@
 
   // Fetch user's subscriptions
   function fetchSubscriptions() {
+      document.getElementById('subscription-loading').style.display = 'block';
+      
       fetch('/api/subscriptions')
           .then(response => response.json())
           .then(data => {
+              document.getElementById('subscription-loading').style.display = 'none';
               if (data.success) {
                   subscriptions = data.subscriptions;
                   updateSubscriptionArea();
+              } else {
+                  showToast('Error loading subscriptions: ' + data.message, true);
               }
           })
           .catch(error => {
+              document.getElementById('subscription-loading').style.display = 'none';
               console.error('Error fetching subscriptions:', error);
+              showToast('Failed to load subscriptions. Please refresh the page.', true);
           });
   }
 
@@ -212,6 +253,7 @@
         artistImage.className = 'artist-image';
         artistImage.src = subscription.imageUrl || 'default-artist.jpg';
         artistImage.alt = subscription.artist;
+        artistImage.onerror = function() { this.src = 'default-artist.jpg'; };
 
         // Remove button
         const removeButton = document.createElement('button');
@@ -238,7 +280,7 @@
 
       // Validate that at least one field is filled
       if (!title && !artist && !year && !album) {
-          alert('Please fill at least one field to search.');
+          showToast('Please fill at least one field to search.', true);
           return;
       }
 
@@ -251,13 +293,18 @@
 
       // Clear previous results and show loading message
       const resultsArea = document.getElementById('results-area');
-      resultsArea.innerHTML = '<p>Searching...</p>';
+      resultsArea.innerHTML = '';
+      document.getElementById('query-loading').style.display = 'block';
       document.getElementById('error-message').style.display = 'none';
+      document.getElementById('query-button').disabled = true;
 
       // Send query to server
       fetch(`/api/music/search?${params.toString()}`)
           .then(response => response.json())
           .then(data => {
+              document.getElementById('query-loading').style.display = 'none';
+              document.getElementById('query-button').disabled = false;
+              
               if (data.success && data.results.length > 0) {
                   displaySearchResults(data.results);
               } else {
@@ -267,6 +314,8 @@
               }
           })
           .catch(error => {
+              document.getElementById('query-loading').style.display = 'none';
+              document.getElementById('query-button').disabled = false;
               console.error('Error searching music:', error);
               document.getElementById('results-area').innerHTML = '';
               document.getElementById('error-message').textContent = 'Error searching for music. Please try again.';
@@ -300,13 +349,27 @@
           artistImage.className = 'artist-image';
           artistImage.src = result.imageUrl || 'default-artist.jpg';
           artistImage.alt = result.artist;
+          artistImage.onerror = function() { this.src = 'default-artist.jpg'; };
+
+          // Check if the user is already subscribed to this music
+          const isSubscribed = subscriptions.some(sub => 
+              sub.musicId === result.id || 
+              (sub.title === result.title && sub.artist === result.artist)
+          );
 
           // Subscribe button
           const subscribeButton = document.createElement('button');
-          subscribeButton.textContent = 'Subscribe';
-          subscribeButton.onclick = function() {
-              addSubscription(result);
-          };
+          
+          if (isSubscribed) {
+              subscribeButton.textContent = 'Already Subscribed';
+              subscribeButton.disabled = true;
+              subscribeButton.style.backgroundColor = '#888';
+          } else {
+              subscribeButton.textContent = 'Subscribe';
+              subscribeButton.onclick = function() {
+                  addSubscription(result);
+              };
+          }
 
           musicItem.appendChild(musicInfo);
           musicItem.appendChild(artistImage);
@@ -318,6 +381,14 @@
 
   // Add subscription
   function addSubscription(music) {
+      // Disable all subscribe buttons to prevent double-clicks
+      document.querySelectorAll('#results-area button').forEach(btn => {
+          btn.disabled = true;
+          if (btn.textContent === 'Subscribe') {
+              btn.textContent = 'Subscribing...';
+          }
+      });
+      
       // Log the music object to see its structure
       console.log("Adding subscription for:", music);
 
@@ -338,31 +409,70 @@
       })
       .then(response => response.json())
       .then(data => {
-          if (data.success) {
-              // If server returns the full subscription data, use it
-              if (data.subscription) {
-                  subscriptions.push(data.subscription);
-              } else {
-                  // Otherwise, use the original music data plus a fake ID
-                  const newSubscription = {
-                      id: Date.now().toString(), // Temporary ID until refresh
-                      ...music
-                  };
-                  subscriptions.push(newSubscription);
+          // Re-enable buttons
+          document.querySelectorAll('#results-area button').forEach(btn => {
+              btn.disabled = false;
+              if (btn.textContent === 'Subscribing...') {
+                  btn.textContent = 'Subscribe';
               }
-              updateSubscriptionArea();
-              alert('Subscription added!');
+          });
+          
+          if (data.success) {
+              showToast('Subscription added successfully!');
+              
+              // Instead of directly adding to the array, refresh all subscriptions
+              // This ensures we have the most up-to-date data from the server
+              fetchSubscriptions();
+              
+              // Also update the current search results to reflect the new subscription
+              const currentResults = document.querySelectorAll('#results-area .music-item');
+              currentResults.forEach(resultItem => {
+                  const titleElem = resultItem.querySelector('.music-info p:first-child');
+                  const artistElem = resultItem.querySelector('.music-info p:nth-child(2)');
+                  
+                  if (titleElem && artistElem) {
+                      const resultTitle = titleElem.textContent.replace('Title:', '').trim();
+                      const resultArtist = artistElem.textContent.replace('Artist:', '').trim();
+                      
+                      if (resultTitle === music.title && resultArtist === music.artist) {
+                          const button = resultItem.querySelector('button');
+                          button.textContent = 'Already Subscribed';
+                          button.disabled = true;
+                          button.style.backgroundColor = '#888';
+                          button.onclick = null;
+                      }
+                  }
+              });
           } else {
-              alert('Error: ' + data.message);
+              showToast(data.message || 'Failed to add subscription', true);
           }
       })
       .catch(error => {
+          // Re-enable buttons
+          document.querySelectorAll('#results-area button').forEach(btn => {
+              btn.disabled = false;
+              if (btn.textContent === 'Subscribing...') {
+                  btn.textContent = 'Subscribe';
+              }
+          });
+          
           console.error('Error adding subscription:', error);
-          alert('Failed to add subscription. Please try again.');
+          showToast('Failed to add subscription. Please try again.', true);
       });
   }
 
   function removeSubscription(subscriptionId) {
+      // Find the subscription item in the DOM
+      const subscriptionElement = document.querySelector(`[data-id="${subscriptionId}"]`);
+      if (subscriptionElement) {
+          subscriptionElement.style.opacity = '0.5';
+          const removeBtn = subscriptionElement.querySelector('button.remove');
+          if (removeBtn) {
+              removeBtn.textContent = 'Removing...';
+              removeBtn.disabled = true;
+          }
+      }
+
       fetch(`/api/subscriptions/${subscriptionId}`, {
           method: 'DELETE',
           credentials: 'same-origin'
@@ -370,17 +480,50 @@
       .then(response => response.json())
       .then(data => {
           if (data.success) {
-              // Remove from local array and update UI
-              subscriptions = subscriptions.filter(sub => sub.id !== subscriptionId);
-              updateSubscriptionArea();
+              showToast('Subscription removed successfully');
+              
+              // Instead of just removing the item from the array, fetch all subscriptions
+              // This ensures we have the most up-to-date data
+              fetchSubscriptions();
           } else {
-              alert('Error: ' + data.message);
+              // Reset the UI if there was an error
+              if (subscriptionElement) {
+                  subscriptionElement.style.opacity = '1';
+                  const removeBtn = subscriptionElement.querySelector('button.remove');
+                  if (removeBtn) {
+                      removeBtn.textContent = 'Remove';
+                      removeBtn.disabled = false;
+                  }
+              }
+              showToast(data.message || 'Failed to remove subscription', true);
           }
       })
       .catch(error => {
+          // Reset the UI
+          if (subscriptionElement) {
+              subscriptionElement.style.opacity = '1';
+              const removeBtn = subscriptionElement.querySelector('button.remove');
+              if (removeBtn) {
+                  removeBtn.textContent = 'Remove';
+                  removeBtn.disabled = false;
+              }
+          }
           console.error('Error removing subscription:', error);
-          alert('Failed to remove subscription. Please try again.');
+          showToast('Failed to remove subscription. Please try again.', true);
       });
+  }
+  
+  // Show toast message
+  function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = isError ? 'toast error' : 'toast';
+      toast.style.display = 'block';
+      
+      // Hide after 3 seconds
+      setTimeout(() => {
+          toast.style.display = 'none';
+      }, 3000);
   }
 </script>
 </body>

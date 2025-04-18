@@ -176,6 +176,13 @@ public class SparkMainHandler {
                 return jsonResponse.toString();
             }
 
+            // Validate required fields
+            if (!requestJson.has("title") || !requestJson.has("artist")) {
+                jsonResponse.put("success", false);
+                jsonResponse.put("message", "Missing required fields: title and artist");
+                return jsonResponse.toString();
+            }
+
             // Get all fields from the request - with more flexible handling
             // The client might send either 'id' or 'musicId' field
             String musicId = requestJson.has("id") ? requestJson.getString("id") :
@@ -186,6 +193,22 @@ public class SparkMainHandler {
             String artist = requestJson.getString("artist");
             String year = requestJson.optString("year", "");
             String album = requestJson.optString("album", "");
+
+            // Check if subscription already exists for this user and music
+            Map<String, Object> expressionAttributeValues = new HashMap<>();
+            expressionAttributeValues.put(":email", email);
+            expressionAttributeValues.put(":musicId", musicId);
+
+            ItemCollection<ScanOutcome> existingItems = subscriptionTable.scan(
+                    "userEmail = :email and musicId = :musicId",
+                    null,
+                    expressionAttributeValues);
+
+            if (existingItems.iterator().hasNext()) {
+                jsonResponse.put("success", false);
+                jsonResponse.put("message", "You are already subscribed to " + title);
+                return jsonResponse.toString();
+            }
 
             // Generate a unique ID for the subscription
             String subscriptionId = UUID.randomUUID().toString();
@@ -247,13 +270,28 @@ public class SparkMainHandler {
 
             // Get subscription ID from path parameter
             String subscriptionId = request.params(":id");
+            System.out.println("Removing subscription with ID: " + subscriptionId);
             if (subscriptionId == null) {
                 jsonResponse.put("success", false);
                 jsonResponse.put("message", "No subscription ID provided");
                 return jsonResponse.toString();
             }
 
-            // Delete the subscription directly by ID
+            // First verify the subscription belongs to this user
+            Item subscription = subscriptionTable.getItem("id", subscriptionId);
+            if (subscription == null) {
+                jsonResponse.put("success", false);
+                jsonResponse.put("message", "Subscription not found");
+                return jsonResponse.toString();
+            }
+            
+            if (!email.equals(subscription.getString("userEmail"))) {
+                jsonResponse.put("success", false);
+                jsonResponse.put("message", "You don't have permission to remove this subscription");
+                return jsonResponse.toString();
+            }
+
+            // Delete the subscription
             subscriptionTable.deleteItem("id", subscriptionId);
             jsonResponse.put("success", true);
             jsonResponse.put("message", "Subscription removed successfully");
