@@ -22,7 +22,7 @@ public class SparkMainHandler {
 
     private static final String MUSIC_TABLE = "Music";
     private static final String SUBSCRIPTION_TABLE = "Subscription";
-    private static final String S3_BUCKET = "s4062787-mybucket"; // Replace with your S3 bucket name
+    private static final String S3_BUCKET = "s4062787-mybucket"; //  put your S3 bucket name
     private static DynamoDB dynamoDB;
     private static AmazonS3 s3Client;
     private static Table musicTable;
@@ -124,26 +124,25 @@ public class SparkMainHandler {
             JSONArray subscriptionsArray = new JSONArray();
 
             for (Item item : items) {
-                String musicId = item.getString("musicId");
+                JSONObject subscription = new JSONObject();
+                subscription.put("id", item.getString("id"));
+                subscription.put("title", item.getString("title"));
+                subscription.put("artist", item.getString("artist"));
 
-                // Get music details
-                Item musicItem = musicTable.getItem("id", musicId);
+                // Add year and album if they exist
+                if (item.hasAttribute("year"))
+                    subscription.put("year", item.getString("year"));
+                if (item.hasAttribute("album"))
+                    subscription.put("album", item.getString("album"));
+                if (item.hasAttribute("musicId"))
+                    subscription.put("musicId", item.getString("musicId"));
 
-                if (musicItem != null) {
-                    JSONObject subscription = new JSONObject();
-                    subscription.put("id", item.getString("id")); // This line adds the subscription ID
-                    subscription.put("title", musicItem.getString("title"));
-                    subscription.put("artist", musicItem.getString("artist"));
-                    subscription.put("year", musicItem.getString("year"));
-                    subscription.put("album", musicItem.getString("album"));
+                // Fixed path to match upload path in Task2AWSS3.java
+                String imageKey = "artist-images/" + item.getString("artist").replace(" ", "") + ".jpg";
+                String imageUrl = generatePresignedUrl(imageKey);
+                subscription.put("imageUrl", imageUrl);
 
-                    // Fixed path to match upload path in Task2AWSS3.java
-                    String imageKey = "artist-images/" + musicItem.getString("artist").replace(" ", "") + ".jpg";
-                    String imageUrl = generatePresignedUrl(imageKey);
-                    subscription.put("imageUrl", imageUrl);
-
-                    subscriptionsArray.put(subscription);
-                }
+                subscriptionsArray.put(subscription);
             }
 
             jsonResponse.put("success", true);
@@ -177,26 +176,52 @@ public class SparkMainHandler {
                 return jsonResponse.toString();
             }
 
-            // Get the necessary fields from the request
-            String title = requestJson.has("title") ? requestJson.getString("title") : "";
-            String artist = requestJson.has("artist") ? requestJson.getString("artist") : "";
+            // Get all fields from the request - with more flexible handling
+            // The client might send either 'id' or 'musicId' field
+            String musicId = requestJson.has("id") ? requestJson.getString("id") :
+                    (requestJson.has("musicId") ? requestJson.getString("musicId") :
+                            UUID.randomUUID().toString());
+
+            String title = requestJson.getString("title");
+            String artist = requestJson.getString("artist");
+            String year = requestJson.optString("year", "");
+            String album = requestJson.optString("album", "");
 
             // Generate a unique ID for the subscription
             String subscriptionId = UUID.randomUUID().toString();
 
-            // Create subscription item
+            // Create subscription item with all music information
             Item subscriptionItem = new Item()
                     .withPrimaryKey("id", subscriptionId)
-                    .withString("email", email)
+                    .withString("userEmail", email)
+                    .withString("musicId", musicId)
                     .withString("title", title)
                     .withString("artist", artist)
                     .withLong("timestamp", System.currentTimeMillis());
 
+            // Add optional fields if present
+            if (!year.isEmpty()) subscriptionItem.withString("year", year);
+            if (!album.isEmpty()) subscriptionItem.withString("album", album);
+
             // Put the item into the Subscription table
             subscriptionTable.putItem(subscriptionItem);
 
+            JSONObject subscriptionData = new JSONObject();
+            subscriptionData.put("id", subscriptionId);
+            subscriptionData.put("musicId", musicId);
+            subscriptionData.put("title", title);
+            subscriptionData.put("artist", artist);
+            if (!year.isEmpty()) subscriptionData.put("year", year);
+            if (!album.isEmpty()) subscriptionData.put("album", album);
+
+            // Fixed path to match upload path in Task2AWSS3.java
+            String imageKey = "artist-images/" + artist.replace(" ", "") + ".jpg";
+            String imageUrl = generatePresignedUrl(imageKey);
+            subscriptionData.put("imageUrl", imageUrl);
+
             jsonResponse.put("success", true);
             jsonResponse.put("message", "Successfully subscribed to " + title);
+            jsonResponse.put("subscription", subscriptionData);
 
         } catch (Exception e) {
             jsonResponse.put("success", false);
@@ -251,6 +276,9 @@ public class SparkMainHandler {
             String year = request.queryParams("year");
             String album = request.queryParams("album");
 
+            System.out.println("Search parameters - Title: " + title + ", Artist: " + artist +
+                    ", Year: " + year + ", Album: " + album);
+
             // Build filter expression and attribute values
             StringBuilder filterExpressionBuilder = new StringBuilder();
             Map<String, Object> expressionAttributeValues = new HashMap<String, Object>();
@@ -273,8 +301,10 @@ public class SparkMainHandler {
                 if (filterExpressionBuilder.length() > 0) {
                     filterExpressionBuilder.append(" and ");
                 }
-                filterExpressionBuilder.append("contains(#yr, :year)");
-                expressionAttributeValues.put(":year", year);
+                // Use equality instead of contains for year, and handle both string and number formats
+                filterExpressionBuilder.append("(#yr = :yearString OR #yr = :yearNumber)");
+                expressionAttributeValues.put(":yearString", year);
+                expressionAttributeValues.put(":yearNumber", Integer.parseInt(year));
                 expressionAttributeNames.put("#yr", "year");
             }
 
@@ -288,9 +318,14 @@ public class SparkMainHandler {
 
             // Execute scan with filter
             ItemCollection<ScanOutcome> items;
-            if (filterExpressionBuilder.length() > 0) {
+            String filterExpression = filterExpressionBuilder.toString();
+
+            System.out.println("Filter expression: " + filterExpression);
+            System.out.println("Expression attribute values: " + expressionAttributeValues);
+
+            if (filterExpression.length() > 0) {
                 items = musicTable.scan(
-                        filterExpressionBuilder.toString(),
+                        filterExpression,
                         expressionAttributeNames.isEmpty() ? null : expressionAttributeNames,
                         expressionAttributeValues
                 );
@@ -306,7 +341,19 @@ public class SparkMainHandler {
                 musicJson.put("id", item.getString("id"));
                 musicJson.put("title", item.getString("title"));
                 musicJson.put("artist", item.getString("artist"));
-                musicJson.put("year", item.getString("year"));
+
+                // Handle the year field which could be a number or string
+                if (item.hasAttribute("year")) {
+                    Object yearValue = item.get("year");
+                    if (yearValue instanceof Number) {
+                        musicJson.put("year", String.valueOf(yearValue));
+                    } else {
+                        musicJson.put("year", item.getString("year"));
+                    }
+                } else {
+                    musicJson.put("year", "");
+                }
+
                 musicJson.put("album", item.getString("album"));
 
                 // Fixed path to match upload path in Task2AWSS3.java
@@ -317,6 +364,8 @@ public class SparkMainHandler {
                 resultsArray.put(musicJson);
             }
 
+            System.out.println("Query returned " + resultsArray.length() + " results");
+
             if (resultsArray.length() == 0) {
                 jsonResponse.put("success", false);
                 jsonResponse.put("message", "No result is retrieved. Please query again");
@@ -326,9 +375,10 @@ public class SparkMainHandler {
             }
 
         } catch (Exception e) {
+            System.err.println("Error in searchMusic: " + e.getMessage());
+            e.printStackTrace();
             jsonResponse.put("success", false);
             jsonResponse.put("message", "Error: " + e.getMessage());
-            e.printStackTrace();
         }
 
         return jsonResponse.toString();

@@ -179,9 +179,6 @@
 
   // Update subscription area with user's subscriptions
   function updateSubscriptionArea() {
-    // Debug the subscriptions array
-    console.log("Subscriptions data:", subscriptions);
-
     const subscriptionArea = document.getElementById('subscription-area');
     const noSubscriptions = document.getElementById('no-subscriptions');
 
@@ -196,16 +193,9 @@
 
     // Create and append each subscription item
     subscriptions.forEach(subscription => {
-        // Debug each subscription object
-        console.log("Processing subscription:", subscription);
-
         const musicItem = document.createElement('div');
         musicItem.className = 'music-item';
-
-        // Make sure id exists - use id if available, otherwise fallback to title
-        const subId = subscription.id || subscription.title;
-        console.log("Using ID for music item:", subId);
-        musicItem.setAttribute('data-id', subId);
+        musicItem.setAttribute('data-id', subscription.id);
 
         // Music info
         const musicInfo = document.createElement('div');
@@ -227,13 +217,8 @@
         const removeButton = document.createElement('button');
         removeButton.textContent = 'Remove';
         removeButton.className = 'remove';
-        removeButton.setAttribute('data-id', subId);
-        console.log("Adding remove button with ID:", subId);
-
-        // Direct event handler assignment
         removeButton.onclick = function() {
-            console.log("Remove button clicked with ID:", subId);
-            removeSubscription(subId);
+            removeSubscription(subscription.id);
         };
 
         musicItem.appendChild(musicInfo);
@@ -242,45 +227,6 @@
 
         subscriptionArea.appendChild(musicItem);
     });
-}
-
-  // Create a music item element
-  function createMusicItem(music, isSubscription) {
-      const musicItem = document.createElement('div');
-      musicItem.className = 'music-item';
-
-      // Music info
-      const musicInfo = document.createElement('div');
-      musicInfo.className = 'music-info';
-      musicInfo.innerHTML = `
-          <p><strong>Title:</strong> ${music.title}</p>
-          <p><strong>Artist:</strong> ${music.artist}</p>
-          <p><strong>Year:</strong> ${music.year}</p>
-          <p><strong>Album:</strong> ${music.album}</p>
-      `;
-
-      // Artist image
-      const artistImage = document.createElement('img');
-      artistImage.className = 'artist-image';
-      artistImage.src = music.imageUrl || 'default-artist.jpg';
-      artistImage.alt = music.artist;
-
-      // Button (Subscribe or Remove)
-      const button = document.createElement('button');
-      if (isSubscription) {
-          button.textContent = 'Remove';
-          button.className = 'remove';
-          button.onclick = () => removeSubscription(music.id);
-      } else {
-          button.textContent = 'Subscribe';
-          button.onclick = () => addSubscription(music);
-      }
-
-      musicItem.appendChild(musicInfo);
-      musicItem.appendChild(artistImage);
-      musicItem.appendChild(button);
-
-      return musicItem;
   }
 
   // Query button click handler
@@ -303,6 +249,11 @@
       if (year) params.append('year', year);
       if (album) params.append('album', album);
 
+      // Clear previous results and show loading message
+      const resultsArea = document.getElementById('results-area');
+      resultsArea.innerHTML = '<p>Searching...</p>';
+      document.getElementById('error-message').style.display = 'none';
+
       // Send query to server
       fetch(`/api/music/search?${params.toString()}`)
           .then(response => response.json())
@@ -311,11 +262,14 @@
                   displaySearchResults(data.results);
               } else {
                   document.getElementById('results-area').innerHTML = '';
+                  document.getElementById('error-message').textContent = data.message || 'No results found. Please try a different search.';
                   document.getElementById('error-message').style.display = 'block';
               }
           })
           .catch(error => {
               console.error('Error searching music:', error);
+              document.getElementById('results-area').innerHTML = '';
+              document.getElementById('error-message').textContent = 'Error searching for music. Please try again.';
               document.getElementById('error-message').style.display = 'block';
           });
   });
@@ -328,65 +282,106 @@
       resultsArea.innerHTML = '<h3>Search Results:</h3>';
 
       results.forEach(result => {
-          const musicItem = createMusicItem(result, false);
+          const musicItem = document.createElement('div');
+          musicItem.className = 'music-item';
+
+          // Music info
+          const musicInfo = document.createElement('div');
+          musicInfo.className = 'music-info';
+          musicInfo.innerHTML = `
+              <p><strong>Title:</strong> ${result.title}</p>
+              <p><strong>Artist:</strong> ${result.artist}</p>
+              <p><strong>Year:</strong> ${result.year || 'N/A'}</p>
+              <p><strong>Album:</strong> ${result.album || 'N/A'}</p>
+          `;
+
+          // Artist image
+          const artistImage = document.createElement('img');
+          artistImage.className = 'artist-image';
+          artistImage.src = result.imageUrl || 'default-artist.jpg';
+          artistImage.alt = result.artist;
+
+          // Subscribe button
+          const subscribeButton = document.createElement('button');
+          subscribeButton.textContent = 'Subscribe';
+          subscribeButton.onclick = function() {
+              addSubscription(result);
+          };
+
+          musicItem.appendChild(musicInfo);
+          musicItem.appendChild(artistImage);
+          musicItem.appendChild(subscribeButton);
+
           resultsArea.appendChild(musicItem);
       });
   }
 
-// Add subscription
-function addSubscription(music) {
-    fetch('/api/subscriptions', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            title: music.title,
-            artist: music.artist
-        }),
-        credentials: 'same-origin'
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Add to local subscriptions and update UI
-            subscriptions.push(music);
-            updateSubscriptionArea();
-            alert('Subscription added!');
-        } else {
-            alert('Error: ' + data.message);
-        }
-    })
-    .catch(error => {
-        console.error('Error adding subscription:', error);
-    });
-}
-function removeSubscription(subscriptionId) {
-    if (!subscriptionId) {
-        console.error("Cannot remove subscription: ID is undefined");
-        return;
-    }
+  // Add subscription
+  function addSubscription(music) {
+      // Log the music object to see its structure
+      console.log("Adding subscription for:", music);
 
-    fetch(`/api/subscriptions/${subscriptionId}`, {
-        method: 'DELETE',
-        credentials: 'same-origin'
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Remove from local array and update UI
-            subscriptions = subscriptions.filter(sub => sub.id !== subscriptionId);
-            updateSubscriptionArea();
-            alert("Subscription removed successfully");
-        } else {
-            alert('Error: ' + data.message);
-        }
-    })
-    .catch(error => {
-        console.error('Error removing subscription:', error);
-    });
-}
+      fetch('/api/subscriptions', {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+              // Don't rely on music.id which might be missing
+              id: music.id || music.musicId || Date.now().toString(),
+              title: music.title,
+              artist: music.artist,
+              year: music.year || '',
+              album: music.album || ''
+          }),
+          credentials: 'same-origin'
+      })
+      .then(response => response.json())
+      .then(data => {
+          if (data.success) {
+              // If server returns the full subscription data, use it
+              if (data.subscription) {
+                  subscriptions.push(data.subscription);
+              } else {
+                  // Otherwise, use the original music data plus a fake ID
+                  const newSubscription = {
+                      id: Date.now().toString(), // Temporary ID until refresh
+                      ...music
+                  };
+                  subscriptions.push(newSubscription);
+              }
+              updateSubscriptionArea();
+              alert('Subscription added!');
+          } else {
+              alert('Error: ' + data.message);
+          }
+      })
+      .catch(error => {
+          console.error('Error adding subscription:', error);
+          alert('Failed to add subscription. Please try again.');
+      });
+  }
 
+  function removeSubscription(subscriptionId) {
+      fetch(`/api/subscriptions/${subscriptionId}`, {
+          method: 'DELETE',
+          credentials: 'same-origin'
+      })
+      .then(response => response.json())
+      .then(data => {
+          if (data.success) {
+              // Remove from local array and update UI
+              subscriptions = subscriptions.filter(sub => sub.id !== subscriptionId);
+              updateSubscriptionArea();
+          } else {
+              alert('Error: ' + data.message);
+          }
+      })
+      .catch(error => {
+          console.error('Error removing subscription:', error);
+          alert('Failed to remove subscription. Please try again.');
+      });
+  }
 </script>
 </body>
 </html>
