@@ -5,7 +5,9 @@ import spark.Spark;
 public class Application {
     public static void main(String[] args) {
         // Get port from environment variable, command line argument, or use default 80
+
         int port = getPort(args);
+        Spark.ipAddress("0.0.0.0");
         Spark.port(port);
 
         // Set up static files location
