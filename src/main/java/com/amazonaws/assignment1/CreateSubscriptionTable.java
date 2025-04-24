@@ -16,11 +16,26 @@ public class CreateSubscriptionTable {
                     .withCredentials(new DefaultAWSCredentialsProviderChain())
                     .build();
 
+            // Updated schema to include 'id' as the primary key
+            // This matches the schema expected by both the Java app and Lambda
             CreateTableRequest request = new CreateTableRequest()
                     .withTableName("Subscription")
                     .withKeySchema(new KeySchemaElement("id", KeyType.HASH))
-                    .withAttributeDefinitions(new AttributeDefinition("id", ScalarAttributeType.S))
+                    .withAttributeDefinitions(
+                        new AttributeDefinition("id", ScalarAttributeType.S))
                     .withProvisionedThroughput(new ProvisionedThroughput(5L, 5L));
+
+            // Optional: Add a Global Secondary Index for userEmail to speed up queries
+            GlobalSecondaryIndex emailIndex = new GlobalSecondaryIndex()
+                    .withIndexName("userEmail-index")
+                    .withKeySchema(new KeySchemaElement("userEmail", KeyType.HASH))
+                    .withProvisionedThroughput(new ProvisionedThroughput(5L, 5L))
+                    .withProjection(new Projection().withProjectionType(ProjectionType.ALL));
+            
+            request.withGlobalSecondaryIndexes(emailIndex);
+            request.withAttributeDefinitions(
+                    new AttributeDefinition("id", ScalarAttributeType.S),
+                    new AttributeDefinition("userEmail", ScalarAttributeType.S));
 
             client.createTable(request);
 
