@@ -3,7 +3,7 @@ import boto3
 import uuid
 
 dynamodb = boto3.resource('dynamodb')
-table = dynamodb.Table('Login')  # Changed from 'UsersTable' to 'Login' to match Java app
+table = dynamodb.Table('Login')
 
 def lambda_handler(event, context):
     method = event['httpMethod']
